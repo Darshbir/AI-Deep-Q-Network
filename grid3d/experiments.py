@@ -76,3 +76,29 @@ def run_experiments(
         results["step"][cstep] = {"mean": mean_g, "std": std_g, "random_mean": rnd_mean, "random_std": rnd_std, "rewards": info["rewards"]}
 
     return results
+
+def run_alpha_experiment(
+    base_env,
+    alpha_list=[0.05, 0.1, 0.2],
+    episodes: int = 2000,
+    gamma: float = 0.95,
+    epsilon_sched=(1.0, 0.05, 3000),
+    max_steps_per_ep: int = 200,
+    seed: int = 123,
+):
+    results = {}
+    eps0, eps1, edecay = epsilon_sched
+    for a in alpha_list:
+        Q, info = train_q_learning(base_env,
+                                   episodes=episodes,
+                                   alpha=a,
+                                   gamma=gamma,
+                                   epsilon_start=eps0,
+                                   epsilon_end=eps1,
+                                   epsilon_decay_steps=edecay,
+                                   max_steps_per_ep=max_steps_per_ep,
+                                   seed=seed)
+        pi = extract_greedy_policy(Q)
+        mean_g, std_g = evaluate_policy(base_env, pi, episodes=100, max_steps_per_ep=max_steps_per_ep, seed=seed+1)
+        results[a] = {"mean": mean_g, "std": std_g, "rewards": info["rewards"]}
+    return results

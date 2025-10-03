@@ -24,13 +24,14 @@ def train_q_learning(
     epsilon_decay_steps: int = 3000,
     max_steps_per_ep: int = 200,
     seed: int = 123,
-) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+):
     rng = np.random.RandomState(seed)
     nS = env.n_states
     nA = env.n_actions
     Q = np.zeros((nS, nA), dtype=np.float32)
     rewards = np.zeros(episodes, dtype=np.float32)
     epsilons = np.zeros(episodes, dtype=np.float32)
+    successes = np.zeros(episodes, dtype=np.float32)   # NEW
 
     def eps_at(t):
         if t >= epsilon_decay_steps:
@@ -45,6 +46,7 @@ def train_q_learning(
         steps = 0
         epsilon = eps_at(ep)
         epsilons[ep] = epsilon
+
         while not done and steps < max_steps_per_ep:
             a = epsilon_greedy(Q, s, epsilon, rng)
             s2, r, done, _ = env.step(a)
@@ -53,11 +55,15 @@ def train_q_learning(
             G += r
             s = s2
             steps += 1
+
         rewards[ep] = G
+        if env.coord(s) == env.goal:   # reached goal
+            successes[ep] = 1.0
 
     info = {
         "rewards": rewards,
         "epsilons": epsilons,
+        "successes": successes,  
         "alpha": np.array([alpha]),
         "gamma": np.array([gamma]),
         "episodes": np.array([episodes]),

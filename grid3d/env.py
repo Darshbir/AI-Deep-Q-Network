@@ -148,58 +148,59 @@ class Gridworld3D:
 
     def step(self, a: Action):
         """
-        Returns: (s', r, done, info)
-        s' as integer state id; 'done' True if terminal reached or currently in absorbing terminal.
+        One environment step with stochastic slip.
+        Returns: (next_state_idx, reward, done, info)
+        Rules:
+        - If already absorbing (in goal/pit), self-loop with zero reward.
+        - Sample intended vs 4 perpendicular outcomes; blocked outcomes result in staying in place.
+        - Entering goal yields +50 and becomes absorbing (no step cost on that transition).
+        - Entering pit yields -50 and becomes absorbing (no step cost on that transition).
+        - Non-terminal transitions yield step cost c_step.
         """
         if self._absorbing:
-            # Already absorbing; self-loop with zero reward
+            # Already in an absorbing terminal; self-loop with zero reward.
             return self.coord2idx[self.s], 0.0, True, {}
 
+        # Build slip distribution: intended + 4 perpendicular actions
         intended_vec = Gridworld3D.ACTIONS[a]
-        axis = np.argmax(np.abs(intended_vec))
-        # perpendicular moves: the other two axes have ± moves => 4 perpendicular actions
-        perp_actions = []
-        for ai, vec in enumerate(Gridworld3D.ACTIONS):
-            if ai == a:
-                continue
-            # perpendicular iff different axis
-            if np.argmax(np.abs(vec)) != axis:
-                perp_actions.append(ai)
+        axis = int(np.argmax(np.abs(intended_vec)))
+        perp_actions = [ai for ai, vec in enumerate(Gridworld3D.ACTIONS)
+                        if ai != a and int(np.argmax(np.abs(vec))) != axis]
         assert len(perp_actions) == 4
 
         choices = [a] + perp_actions
-        probs = [self.p_intended] + [ (1.0 - self.p_intended)/4.0 ] * 4
+        probs = [self.p_intended] + [(1.0 - self.p_intended) / 4.0] * 4
 
-        # Sample action outcome
-        pick = self.rng.choice(len(choices), p=probs)
-        a_exec = choices[ int(pick) ]
+        # Sample executed primitive move
+        pick = int(self.rng.choice(len(choices), p=probs))
+        a_exec = choices[pick]
 
-        # Compute next coordinate with blocking
+        # Apply move with blocking
         x, y, z = self.s
         dx, dy, dz = Gridworld3D.ACTIONS[a_exec]
         nx, ny, nz = x + dx, y + dy, z + dz
-        candidate = (nx, ny, nz)
-        if not (0 <= nx < self.H and 0 <= ny < self.W and 0 <= nz < self.D):
-            s_next = self.s
-        elif candidate in self.obstacles:
+        cand = (nx, ny, nz)
+        if not (0 <= nx < self.H and 0 <= ny < self.W and 0 <= nz < self.D) or cand in self.obstacles:
             s_next = self.s
         else:
-            s_next = candidate
+            s_next = cand
 
-        # Rewards and termination
-        done = False
-        r = self.c_step
+        # Reward and termination
         if s_next == self.goal:
-            r = self.r_goal
+            r = self.r_goal     # +50 on entry (no step cost on this transition)
             done = True
             self._absorbing = True
         elif s_next == self.pit:
-            r = self.r_pit
+            r = self.r_pit      # -50 on entry (no step cost on this transition)
             done = True
             self._absorbing = True
+        else:
+            r = self.c_step     # step cost on non-terminal transitions
+            done = False
 
         self.s = s_next
         return self.coord2idx[self.s], float(r), bool(done), {}
+
 
     # Utilities
     def idx(self, c: Coord) -> State:
